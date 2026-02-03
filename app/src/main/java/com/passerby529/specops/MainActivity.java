@@ -1,18 +1,21 @@
-package com.passerby529.engine
+package com.passerby529.specops;
 
-import android.os.Bundle
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import android.app.Activity;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.widget.TextView;
 
-class MainActivity : AppCompatActivity() {
+public class MainActivity extends Activity {
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
-        val tv = TextView(this)
-        tv.text = "SpecOps Engine Alive"
-        tv.textSize = 24f
+        TextView tv = new TextView(this);
+        tv.setText("SpecOps Engine Alive");
+        tv.setTextSize(24f);
+        tv.setGravity(Gravity.CENTER);
 
-        setContentView(tv)
+        setContentView(tv);
     }
 }
