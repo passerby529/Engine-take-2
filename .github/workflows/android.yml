@@ -1,16 +1,9 @@
-name: Build Android APK (Smart Root)
+name: Build SpecOpsFPS A-Plan APK
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
-    inputs:
-      zip_name:
-        description: "repo 루트에 올린 zip 파일명(비우면 zip 없이 repo 자체 빌드)"
-        required: false
-        default: ""
-      build_type:
-        description: "Debug/Release"
-        required: false
-        default: "Debug"
 
 jobs:
   build:
@@ -20,143 +13,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show commit info (빌드 식별용)
+        run: |
+          echo "COMMIT=$(git rev-parse --short HEAD)"
+          echo "RUN_ID=${GITHUB_RUN_ID}"
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: 17
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.4
-
-      - name: Prepare workspace (optional ZIP)
-        id: prep
-        shell: bash
+      - name: Grant execute permission for gradlew
         run: |
-          set -e
-          rm -rf project
-          mkdir -p project
+          chmod +x ./gradlew
 
-          ZIP_INPUT="${{ inputs.zip_name }}"
-          if [ -n "$ZIP_INPUT" ]; then
-            if [ ! -f "$ZIP_INPUT" ]; then
-              echo "❌ ZIP not found in repo root: $ZIP_INPUT"
-              exit 1
-            fi
-            echo "✅ Unzipping $ZIP_INPUT -> ./project"
-            sudo apt-get update
-            sudo apt-get install -y unzip
-            unzip -q "$ZIP_INPUT" -d project
-          else
-            echo "✅ No ZIP. Copying repo -> ./project"
-            rsync -a --exclude ".git" --exclude "project" ./ project/
-          fi
-
-          echo "=== project top ==="
-          ls -la project
-
-      - name: Locate Gradle root (prefer tree that contains app manifest)
-        id: locate
-        shell: bash
+      - name: Clean & Build Debug APK (A-Plan 전용)
         run: |
-          set -e
-          cd project
+          set -euxo pipefail
 
-          mapfile -t SETTINGS < <(find . -maxdepth 12 -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \))
-          if [ "${#SETTINGS[@]}" -eq 0 ]; then
-            echo "❌ settings.gradle(.kts) not found under ./project"
-            find . -maxdepth 12 -type f -name "*.gradle*" | head -n 200 || true
-            exit 1
-          fi
+          echo "▶ Cleaning old outputs"
+          rm -rf app/build
 
-          PICK=""
-          for S in "${SETTINGS[@]}"; do
-            R="$(dirname "$S")"
-            if [ -f "$R/app/src/main/AndroidManifest.xml" ]; then
-              PICK="$R"
-              break
-            fi
-          done
+          echo "▶ Running Gradle build"
+          ./gradlew --no-daemon :app:clean :app:assembleDebug
 
-          if [ -z "$PICK" ]; then
-            # 가장 안쪽 settings를 우선 선택
-            PICK="$(printf "%s\n" "${SETTINGS[@]}" | awk '{ print length, $0 }' | sort -nr | head -n 1 | cut -d" " -f2-)"
-            PICK="$(dirname "$PICK")"
-          fi
+          echo "▶ APK produced:"
+          find app/build/outputs/apk -type f -name "*.apk" -print -exec ls -lh {} \;
 
-          echo "✅ Gradle root candidate: $PICK"
-          echo "root=$PICK" >> "$GITHUB_OUTPUT"
-
-          echo "=== root listing ==="
-          ls -la "$PICK" || true
-
-          if [ ! -f "$PICK/app/src/main/AndroidManifest.xml" ]; then
-            echo "❌ app/src/main/AndroidManifest.xml still missing at: $PICK"
-            echo "=== manifests found ==="
-            find . -maxdepth 16 -type f -name "AndroidManifest.xml" | head -n 200 || true
-            exit 1
-          fi
-
-      - name: Detect application module (com.android.application)
-        id: module
-        shell: bash
-        run: |
-          set -e
-          cd project
-          ROOT="${{ steps.locate.outputs.root }}"
-
-          MOD_BUILD="$(find "$ROOT" -maxdepth 8 -type f \( -name 'build.gradle' -o -name 'build.gradle.kts' \) \
-            -print0 | xargs -0 -I {} bash -lc "grep -q \"com.android.application\" \"{}\" && echo \"{}\"" \
-            | head -n 1 || true)"
-
-          if [ -n "$MOD_BUILD" ]; then
-            MOD_DIR="$(dirname "$MOD_BUILD")"
-            REL="${MOD_DIR#"$ROOT"/}"
-            if [ -z "$REL" ]; then
-              MODULE="app"
-            else
-              MODULE="${REL%%/*}"
-            fi
-          else
-            MODULE="app"
-          fi
-
-          echo "✅ Module=$MODULE"
-          echo "module=$MODULE" >> "$GITHUB_OUTPUT"
-
-      - name: Build APK
-        shell: bash
-        run: |
-          set -e
-          cd project
-          ROOT="${{ steps.locate.outputs.root }}"
-          MODULE="${{ steps.module.outputs.module }}"
-          TYPE="${{ inputs.build_type }}"
-
-          cd "$ROOT"
-
-          if [ "$TYPE" = "Release" ] || [ "$TYPE" = "release" ]; then
-            TASK=":${MODULE}:assembleRelease"
-          else
-            TASK=":${MODULE}:assembleDebug"
-          fi
-
-          echo "✅ Running task: $TASK"
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew --no-daemon $TASK
-          else
-            gradle --no-daemon $TASK
-          fi
-
-      - name: Upload APK
+      - name: Upload APK (ONLY app module)
         uses: actions/upload-artifact@v4
         with:
-          name: built-apk
+          name: SpecOpsFPS-APlan-debug-${{ github.run_number }}
           path: |
-            project/**/build/outputs/apk/**/*.apk
+            app/build/outputs/apk/debug/*.apk
