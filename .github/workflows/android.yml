@@ -10,46 +10,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
+      # 3. Android SDK
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Locate gradlew automatically
-        id: find-gradle
+      # 4. Grant execute permission (ROOT gradlew)
+      - name: Grant execute permission for gradlew
         run: |
-          echo "🔍 Searching for gradlew..."
-          GRADLEW_PATH=$(find . -name gradlew -type f | head -n 1)
+          chmod +x ./gradlew
 
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "❌ gradlew not found"
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
-          echo "✅ Found gradlew at: $GRADLEW_PATH"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-
-      - name: Grant execute permission
-        run: |
-          chmod +x "$PROJECT_DIR/gradlew"
-
+      # 5. Clean & Build Debug APK (A-Plan)
       - name: Clean & Build Debug APK (A-Plan)
         run: |
           set -euxo pipefail
-          cd "$PROJECT_DIR"
           ./gradlew --no-daemon :app:clean :app:assembleDebug
 
+      # 6. Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SpecOpsFPS-APlan-debug-${{ github.run_number }}
-          path: |
-            **/app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
