@@ -22,30 +22,34 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Move to project directory
+      - name: Locate gradlew automatically
+        id: find-gradle
         run: |
-          cd SpecOpsFPS_A_Android_OpenGL_APlan_fixed_v2
-          pwd
-          ls -la
+          echo "🔍 Searching for gradlew..."
+          GRADLEW_PATH=$(find . -name gradlew -type f | head -n 1)
 
-      - name: Grant execute permission for gradlew
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "❌ gradlew not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
+          echo "✅ Found gradlew at: $GRADLEW_PATH"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+      - name: Grant execute permission
         run: |
-          cd SpecOpsFPS_A_Android_OpenGL_APlan_fixed_v2
-          chmod +x gradlew
+          chmod +x "$PROJECT_DIR/gradlew"
 
-      - name: Clean & Build Debug APK (A-Plan 전용)
+      - name: Clean & Build Debug APK (A-Plan)
         run: |
           set -euxo pipefail
-          cd SpecOpsFPS_A_Android_OpenGL_APlan_fixed_v2
-
+          cd "$PROJECT_DIR"
           ./gradlew --no-daemon :app:clean :app:assembleDebug
-
-          echo "APK output:"
-          find app/build/outputs/apk -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SpecOpsFPS-APlan-debug-${{ github.run_number }}
           path: |
-            SpecOpsFPS_A_Android_OpenGL_APlan_fixed_v2/app/build/outputs/apk/debug/*.apk
+            **/app/build/outputs/apk/debug/*.apk
