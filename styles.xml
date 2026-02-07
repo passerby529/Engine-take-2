@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.SpecOps" parent="android:Theme.DeviceDefault.NoActionBar.Fullscreen" />
+</resources>
